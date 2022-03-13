@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>国际化小插件</title>
+    <style>
+      .container {
+        height: 50vh;
+        display: grid;
+        overflow-y: scroll;
+        grid-template-columns: 1fr 1fr;
+        column-gap: 10px;
+      }
+      .content {
+        height: 50vh;
+        display: grid;
+        overflow-y: scroll;
+        grid-template-columns: 1fr 1fr 2fr;
+        column-gap: 6.66px;
+      }
+      .target {
+        border: 1px solid #eee;
+        white-space: pre;
+      }
+      .target2 {
+        border: 1px solid #eee;
+      }
+      .file-init-dom {
+        position: absolute;
+        visibility: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <button id="remove">去除冗余</button>
+    <!--<button id="paste">复制结果</button><span id="msg"></span>-->
+    <br />
+    <div class="container">
+      <textarea id="removeText" placeholder="请输入搜索到的含有中文的代码"></textarea>
+      <div contenteditable="true" class="target" id="target1"></div>
+    </div>
+    <button id="transform">中文转英文</button>
+    <div class="content">
+      <textarea id="targetText" placeholder="请输入i18n文件内容"></textarea>
+      <textarea id="ruleText" placeholder="请输入规则例如：英语:English"></textarea>
+      <div contenteditable="true" class="target" id="target2"></div>
+    </div>
+    <input id="file" type="file" accept=".html,.htm" />
+    <div class="file-init-dom"></div>
+    <div class="container">
+      <div>
+        <h3>电子协议模板转换插件</h3>
+        上传说明：该插件适用于电子协议。在完成一个word版本的电子协议后，在word中转换为htm文件，然后选择该htm文件上传。将转换的代码填入电子协议模板输入框内。
+      </div>
+      <div contenteditable="true" class="target2" id="file-result"></div>
+    </div>
+    <button id="htmlTransform">html转义</button>
+    <div class="container">
+      <textarea id="htmlText" placeholder="请输入outerHTML,具体为document.getElementById('xx').outerHTML"></textarea>
+      <div contenteditable="true" class="target2" id="target3"></div>
+    </div>
+    <script>
+      function readAsText() {
+        var file = document.getElementById('file').files[0]
+        var reader = new FileReader()
+        reader.readAsText(file, 'gb2312') //读取文本内容
+        reader.onload = function (e) {
+          console.log(e.target.result)
+          var resulttxt = document.querySelector('.file-init-dom')
+          resulttxt.innerHTML = e.target.result
+          let textNode = document.createTextNode(resulttxt.querySelector('div').outerHTML)
+          let div = document.createElement('div')
+          div.append(textNode)
+          document.getElementById('file-result').textContent = div.innerHTML
+        }
+      }
+      document.querySelector('#remove').addEventListener('click', function () {
+        const data = document.querySelector('textarea#removeText').value
+        // baseDate形成,做最基本的处理，后续处理的基础
+        // 1.去掉console.log()
+        // 2.去掉//注释
+        // 3.去掉<!-- -->注释不包括换行
+        // 4.去掉###注释不包括换行
+        // 5.去掉/* */注释不包括换行
+        const baseDate = data
+          .replace(/console.log\(.*\)/g, '')
+          .replace(/log.info\(.*\)/g, '')
+          .replace(/logger.error\(.*\)/g, '')
+          .replace(/@Api(Operation|Param)?\(.*\)/g, '')
+          .replace(/\/\/.*\n/g, '')
+          .replace(/\<\!--.*--\>/g, '')
+          .replace(/###.*\n/g, '')
+          .replace(/\/\*.*?\*\//g, '')
+        // res形成，中文构成的基本数据
+        // 1.去掉/* */注释包括换行
+        // 2.去掉<!-- -->注释包括换行
+        // 3.去掉*后面的一行
+        // 4.去掉空格
+        // 5.取中文
+        let res = baseDate
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/\<\!--[\s\S]*?--\>/g, '')
+          .replace(/\*.*\n/g, '')
+          .replace(/\s/g, '')
+          .match(/[\u4e00-\u9fa5][0-9\u4e00-\u9fa5，,a-zA-Z.${}()?？、！!#+\[\]" ]*[\u4e00-\u9fa5](?![\u4e00-\u9fa5])/g)
+        if (!res) {
+          res = []
+        } else {
+          res = res.join('_').replace(/[ ]/g, '').split('_')
+        }
+        // res2形成,面向vue中属性挂载的中文
+        // 1.取’'"“为开头结尾的中文
+        let res2 = baseDate.match(
+          /["'“‘][\u4e00-\u9fa5][0-9\u4e00-\u9fa5，,a-zA-Z.${}()?？、！!#+\[\]" ]*[\u4e00-\u9fa5]["'“‘]/g,
+        )
+        if (res2) {
+          res2 = res2
+            .join('_')
+            .replace(/["'“‘ ]/g, '')
+            .split('_')
+        } else {
+          res2 = []
+        }
+        // res3形成，面向中文带有英文或js拼接的中文
+        // 1.去掉/* */注释包括换行
+        // 2.去掉<!-- -->注释包括换行
+        // 3.去掉*后面的一行
+        // 4.去可能包含${},英文的中文
+        let res3 = baseDate
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/\<\!--[\s\S]*?--\>/g, '')
+          .replace(/\*.*\n/g, '')
+          .match(/[\u4e00-\u9fa5][0-9\u4e00-\u9fa5，,a-zA-Z.${}()?？、！!#+\[\]" ]*[\u4e00-\u9fa5]/g)
+        if (res3) {
+          res3 = res3.join('_').replace(/[ ]/g, '').split('_')
+        } else {
+          res3 = []
+        }
+        debugger
+        res = [...new Set([...res, ...res2, ...res3])]
+        debugger
+
+        // replace(/[\d\w,，；;:="]/g,'').
+        // .
+        // ;
+        const resset = Array.from(new Set(res))
+        let str = ''
+        for (let i = 0, len = resset.length; i < len; i++) {
+          str = str + resset[i] + '</br>'
+        }
+        target1.innerHTML = str
+      })
+
+      document.querySelector('#transform').addEventListener('click', function () {
+        const data = document.querySelector('textarea#targetText').value
+        const rule = document.querySelector('textarea#ruleText').value
+        const ruleConfig = rule.replace(/：/g, ':').split('\n')
+        const map = {}
+        for (let i = 0, len = ruleConfig.length; i < len; i++) {
+          const trans = ruleConfig[i].split(':')
+          if (trans.length === 2) {
+            map[trans[0].trim()] = trans[1].trim()
+          }
+        }
+        const res = data.replace(/([\u4e00-\u9fa5,，。]+(?![\u4e00-\u9fa5]))/g, function (val) {
+          if (map[val]) {
+            return map[val]
+          }
+          return val
+        })
+        target2.innerHTML = res
+      })
+
+      document.getElementById('htmlTransform').addEventListener('click', function (e) {
+        let textNode = document.createTextNode(document.getElementById('htmlText').value)
+        let div = document.createElement('div')
+        div.append(textNode)
+        document.getElementById('target3').textContent = div.innerHTML
+      })
+
+      document.getElementById('file').addEventListener('change', function (e) {
+        readAsText()
+      })
+    </script>
+  </body>
+</html>
